@@ -15,6 +15,7 @@ class FakeTrilium:
         self.notes = {"root": {"noteId": "root", "title": "root", "type": "book", "attributes": [],
                                "parentNoteIds": [], "childNoteIds": [], "parentBranchIds": []}}
         self.n = 0
+        self.content = {}
         self.log = []
 
     def handler(self, req: httpx.Request) -> httpx.Response:
@@ -26,7 +27,9 @@ class FakeTrilium:
                 return httpx.Response(400, text="'noteMap' is not a valid note type")
             self.n += 1
             nid = f"n{self.n:04d}"
+            self.content[nid] = body["content"]
             self.notes[nid] = {"noteId": nid, "title": body["title"], "type": body["type"], "attributes": [],
+                               "mime": body.get("mime", "text/html"),
                                "parentNoteIds": [body["parentNoteId"]], "childNoteIds": [],
                                "parentBranchIds": [f"{body['parentNoteId']}_{nid}"]}
             self.notes[body["parentNoteId"]]["childNoteIds"].append(nid)
@@ -35,7 +38,15 @@ class FakeTrilium:
             a = {**body, "attributeId": f"a{len(self.log)}"}
             self.notes[body["noteId"]]["attributes"].append(a)
             return httpx.Response(201, json=a)
-        if path.startswith("/notes/") and req.method == "GET" and not path.endswith("/content"):
+        if path.endswith("/content"):
+            nid = path.split("/")[2]
+            if req.method == "PUT":
+                self.content[nid] = req.content.decode()
+                return httpx.Response(204)
+            # like the real server: Content-Type follows the note's mime
+            return httpx.Response(200, content=self.content.get(nid, "").encode(),
+                                  headers={"content-type": self.notes[nid].get("mime", "text/html")})
+        if path.startswith("/notes/") and req.method == "GET":
             return httpx.Response(200, json=self.notes[path.split("/")[2]])
         if req.method == "PATCH" and path.startswith("/notes/"):
             self.notes[path.split("/")[2]].update(body)
@@ -88,3 +99,32 @@ def test_structure_resolves_refs(fake):
 def test_refuses_system_delete(fake):
     with pytest.raises(Exception):
         server.trilium_delete_note("root")
+
+
+def _positions(fake, nid):
+    return {n["noteId"]: (n["x"], n["y"]) for n in json.loads(fake.content[nid])["notes"]}
+
+
+def test_relation_map_create_respects_positions(fake):
+    out = json.loads(server.trilium_create_relation_map(
+        "root", "M", ["a1", "b2", "c3"], positions={"b2": [111, 222], "zz": [9, 9]}))
+    pos = _positions(fake, out["noteId"])
+    assert pos["b2"] == (111, 222)
+    assert set(pos) == {"a1", "b2", "c3"}  # ids not in note_ids are ignored
+
+
+def test_relation_map_update_reads_json_content(fake):
+    """Regression: json-mime content used to come back as a dict -> json.loads TypeError."""
+    nid = json.loads(server.trilium_create_relation_map(
+        "root", "M", ["a1", "b2"], positions={"a1": [10, 20]}))["noteId"]
+    server.trilium_update_relation_map(nid, ["a1", "b2", "c3"], positions={"c3": [7, 8]})
+    pos = _positions(fake, nid)
+    assert pos["a1"] == (10, 20)  # kept from the existing map
+    assert pos["c3"] == (7, 8)
+    server.trilium_update_relation_map(nid, ["a1"], positions={"a1": [1, 2]})
+    assert _positions(fake, nid) == {"a1": (1, 2)}
+
+
+def test_get_content_is_always_text(fake):
+    nid = json.loads(server.trilium_create_relation_map("root", "M", ["a1"]))["noteId"]
+    assert isinstance(server.api().get_content(nid), str)

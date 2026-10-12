@@ -49,7 +49,7 @@ class Trilium:
     # -- low level -------------------------------------------------------
     def request(self, method: str, path: str, *, params: dict | None = None,
                 json_body: Any = None, content: str | bytes | None = None,
-                content_type: str | None = None) -> Any:
+                content_type: str | None = None, raw: bool = False) -> Any:
         headers = {"Content-Type": content_type} if content_type else None
         params = {k: v for k, v in (params or {}).items() if v is not None}
         for k, v in params.items():
@@ -61,7 +61,7 @@ class Trilium:
             raise TriliumError(f"{method} {path} -> {r.status_code}: {r.text[:500]}")
         if r.status_code == 204 or not r.content:
             return None
-        if "json" in r.headers.get("content-type", ""):
+        if not raw and "json" in r.headers.get("content-type", ""):
             return r.json()
         return r.text
 
@@ -70,7 +70,8 @@ class Trilium:
         return self.request("GET", f"/notes/{note_id}")
 
     def get_content(self, note_id: str) -> str:
-        return self.request("GET", f"/notes/{note_id}/content") or ""
+        # raw: json-mime notes (relationMap, code/json) must come back as text, not parsed
+        return self.request("GET", f"/notes/{note_id}/content", raw=True) or ""
 
     def set_content(self, note_id: str, content: str) -> None:
         self.request("PUT", f"/notes/{note_id}/content", content=content.encode(),

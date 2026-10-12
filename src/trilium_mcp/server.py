@@ -305,7 +305,8 @@ def trilium_create_relation_map(parent_note_id: str, title: str, note_ids: list[
                                 layout: str = "grid", spacing: int = 260,
                                 positions: dict[str, list[int]] | None = None) -> str:
     """Create a Relation Map placing the given notes on a canvas. layout: grid|circle|row|column;
-    `positions` optionally overrides {noteId: [x, y]}. Arrows come from the notes' relations."""
+    `positions` optionally overrides {noteId: [x, y]} for ids that are in `note_ids`. Arrows come from the
+    notes' relations."""
     c = api()
     pos = {k: (v[0], v[1]) for k, v in (positions or {}).items()}
     content = relation_map_content(note_ids, layout, spacing, pos)
@@ -315,14 +316,16 @@ def trilium_create_relation_map(parent_note_id: str, title: str, note_ids: list[
 
 @mcp.tool()
 def trilium_update_relation_map(note_id: str, note_ids: list[str], layout: str = "grid",
-                                spacing: int = 260) -> str:
-    """Rewrite which notes a Relation Map shows and how they are laid out (existing positions are kept
-    for notes that were already on the map)."""
+                                spacing: int = 260,
+                                positions: dict[str, list[int]] | None = None) -> str:
+    """Rewrite which notes a Relation Map shows and how they are laid out. Notes already on the map keep
+    their position; `positions` ({noteId: [x, y]}) overrides it. Only ids in `note_ids` are shown."""
     c = api()
     try:
         old = {n["noteId"]: (n["x"], n["y"]) for n in json.loads(c.get_content(note_id)).get("notes", [])}
-    except (ValueError, KeyError):
+    except (ValueError, KeyError, TypeError):
         old = {}
+    old.update({k: (v[0], v[1]) for k, v in (positions or {}).items()})
     c.set_content(note_id, relation_map_content(note_ids, layout, spacing, old))
     return _out({"ok": True, "notes": len(note_ids)})
 
