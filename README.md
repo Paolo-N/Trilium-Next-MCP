@@ -10,7 +10,7 @@ Developed against Trilium `v0.106.0`.
 2. Build the image:
 
    ```bash
-   docker build -t trilium-mcp:0.1.1 .
+   docker build -t trilium-mcp:0.1.2 .
    ```
 
 3. Add it to `claude_desktop_config.json` (same pattern as any stdio Docker MCP):
@@ -23,7 +23,7 @@ Developed against Trilium `v0.106.0`.
          "args": ["run", "--rm", "-i",
                   "-e", "TRILIUM_URL", "-e", "TRILIUM_ETAPI_TOKEN", "-e", "TRILIUM_VERIFY_TLS",
                   "-v", "trilium-mcp-backups:/tmp/trilium-mcp-backups",
-                  "trilium-mcp:0.1.1"],
+                  "trilium-mcp:0.1.2"],
          "env": {
            "TRILIUM_URL": "https://trilium.example.com",
            "TRILIUM_ETAPI_TOKEN": "<token>",

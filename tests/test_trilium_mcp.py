@@ -128,3 +128,17 @@ def test_relation_map_update_reads_json_content(fake):
 def test_get_content_is_always_text(fake):
     nid = json.loads(server.trilium_create_relation_map("root", "M", ["a1"]))["noteId"]
     assert isinstance(server.api().get_content(nid), str)
+
+
+def _transform(fake, nid):
+    return json.loads(fake.content[nid])["transform"]
+
+
+def test_relation_map_update_preserves_transform(fake):
+    nid = json.loads(server.trilium_create_relation_map(
+        "root", "M", ["a1"], transform={"x": 319.6, "y": 484.6, "scale": 0.57}))["noteId"]
+    assert _transform(fake, nid) == {"x": 319.6, "y": 484.6, "scale": 0.57}
+    server.trilium_update_relation_map(nid, ["a1", "b2"])
+    assert _transform(fake, nid) == {"x": 319.6, "y": 484.6, "scale": 0.57}
+    server.trilium_update_relation_map(nid, ["a1", "b2"], transform={"scale": 1})
+    assert _transform(fake, nid) == {"x": 319.6, "y": 484.6, "scale": 1}

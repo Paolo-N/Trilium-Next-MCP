@@ -303,13 +303,14 @@ def trilium_create_note_map(parent_note_id: str, title: str = "Note map",
 @mcp.tool()
 def trilium_create_relation_map(parent_note_id: str, title: str, note_ids: list[str],
                                 layout: str = "grid", spacing: int = 260,
-                                positions: dict[str, list[int]] | None = None) -> str:
+                                positions: dict[str, list[int]] | None = None,
+                                transform: dict[str, float] | None = None) -> str:
     """Create a Relation Map placing the given notes on a canvas. layout: grid|circle|row|column;
-    `positions` optionally overrides {noteId: [x, y]} for ids that are in `note_ids`. Arrows come from the
-    notes' relations."""
+    `positions` optionally overrides {noteId: [x, y]} for ids that are in `note_ids`; `transform` sets the
+    initial pan/zoom {x, y, scale}. Arrows come from the notes' relations."""
     c = api()
     pos = {k: (v[0], v[1]) for k, v in (positions or {}).items()}
-    content = relation_map_content(note_ids, layout, spacing, pos)
+    content = relation_map_content(note_ids, layout, spacing, pos, transform)
     res = c.create_note(parent_note_id, title, "relationMap", content, "application/json")
     return _out({"noteId": res["note"]["noteId"], "notes": len(note_ids)})
 
@@ -317,16 +318,21 @@ def trilium_create_relation_map(parent_note_id: str, title: str, note_ids: list[
 @mcp.tool()
 def trilium_update_relation_map(note_id: str, note_ids: list[str], layout: str = "grid",
                                 spacing: int = 260,
-                                positions: dict[str, list[int]] | None = None) -> str:
+                                positions: dict[str, list[int]] | None = None,
+                                transform: dict[str, float] | None = None) -> str:
     """Rewrite which notes a Relation Map shows and how they are laid out. Notes already on the map keep
-    their position; `positions` ({noteId: [x, y]}) overrides it. Only ids in `note_ids` are shown."""
+    their position; `positions` ({noteId: [x, y]}) overrides it. The current pan/zoom is preserved unless
+    `transform` ({x, y, scale}, partial allowed) is given. Only ids in `note_ids` are shown."""
     c = api()
+    old_tf: dict = {}
     try:
-        old = {n["noteId"]: (n["x"], n["y"]) for n in json.loads(c.get_content(note_id)).get("notes", [])}
+        data = json.loads(c.get_content(note_id))
+        old = {n["noteId"]: (n["x"], n["y"]) for n in data.get("notes", [])}
+        old_tf = data.get("transform") or {}
     except (ValueError, KeyError, TypeError):
         old = {}
     old.update({k: (v[0], v[1]) for k, v in (positions or {}).items()})
-    c.set_content(note_id, relation_map_content(note_ids, layout, spacing, old))
+    c.set_content(note_id, relation_map_content(note_ids, layout, spacing, old, {**old_tf, **(transform or {})}))
     return _out({"ok": True, "notes": len(note_ids)})
 
 

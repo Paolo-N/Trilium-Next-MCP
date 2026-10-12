@@ -23,11 +23,13 @@ def layout_positions(count: int, mode: str = "grid", spacing: int = 260) -> list
 
 
 def relation_map_content(note_ids: list[str], mode: str = "grid", spacing: int = 260,
-                         positions: dict[str, tuple[int, int]] | None = None) -> str:
+                         positions: dict[str, tuple[int, int]] | None = None,
+                         transform: dict | None = None) -> str:
     pos = layout_positions(len(note_ids), mode, spacing)
     notes = []
     for nid, (x, y) in zip(note_ids, pos):
         if positions and nid in positions:
             x, y = positions[nid]
         notes.append({"noteId": nid, "x": x, "y": y})
-    return json.dumps({"notes": notes, "transform": {"x": 0, "y": 0, "scale": 1}})
+    tf = {"x": 0, "y": 0, "scale": 1, **(transform or {})}
+    return json.dumps({"notes": notes, "transform": tf})
